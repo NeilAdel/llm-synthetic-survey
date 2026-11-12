@@ -43,16 +43,14 @@ llm-synthetic-survey-research/
 ├── README.md
 │
 ├── 01_michigan_survey_eda/
-│   └── exploratory_analysis.ipynb
+│  ├── data.json
+│  ├── index.html
 │
-├── 02_persona_extraction/
-│   └── persona_extraction.py
-│
-├── 03_knowledge_restriction/
-│   └── knowledge_restriction.py
-│
-├── 04_survey_pilot/
-   └── pilot_experiment.py
+└── 02_pilot_experiment/
+    ├── README.md
+    ├── persona_extraction.ipynb
+    ├── knowledge_restriction.ipynb
+    └── survey.ipynb
 
 ```
 
