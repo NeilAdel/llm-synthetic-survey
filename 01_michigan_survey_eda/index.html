@@ -1,0 +1,375 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Michigan Gasoline Price Expectations — EDA</title>
+<script src="https://cdn.plot.ly/plotly-2.35.2.min.js"></script>
+<style>
+:root{--ink:#172033;--muted:#667085;--line:#d9e0e8;--bg:#f5f7fa;--card:#fff;--accent:#2457a7}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.5 system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif}
+header{background:#102747;color:#fff;padding:34px clamp(18px,4vw,64px)}header h1{margin:0 0 8px;font-size:clamp(27px,3vw,42px)}header p{margin:0;color:#d6e2f2}.wrap{width:100%;max-width:1800px;margin:auto;padding:24px clamp(12px,2.4vw,38px) 60px}
+section{background:var(--card);border:1px solid var(--line);border-radius:12px;margin:22px 0;padding:24px clamp(12px,2vw,30px);box-shadow:0 2px 9px #1027470a}
+h2{font-size:25px;margin:0 0 6px}h3{font-size:20px;margin:24px 0 8px}.desc{color:var(--muted);margin:0 0 14px}.plot{width:100%;height:640px}.plot.tall{height:850px}.plot.hist{height:1250px}.table-wrap{width:100%;overflow:auto;border:1px solid var(--line);border-radius:8px;max-height:620px}table{width:100%;border-collapse:collapse;min-width:780px;font-size:14px}th,td{padding:9px 11px;border-bottom:1px solid #e8edf2;text-align:right;white-space:nowrap}th{position:sticky;top:0;background:#edf2f8;z-index:1;color:#23334b}th:first-child,td:first-child{text-align:left}tr:nth-child(even){background:#fafbfd}.controls{display:flex;gap:14px;align-items:center;flex-wrap:wrap;margin:12px 0 18px}.controls select{min-width:260px;min-height:150px;padding:8px;border:1px solid #b9c5d3;border-radius:8px;background:white}.btn{border:1px solid #b9c5d3;background:#fff;border-radius:7px;padding:8px 12px;cursor:pointer}.stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:12px;margin:18px 0}.stat{background:#f2f6fb;border:1px solid #dce6f1;border-radius:9px;padding:14px}.stat b{display:block;font-size:25px}.stat span{color:var(--muted);font-size:13px}.note{background:#fff8e8;border-left:4px solid #d99b21;padding:12px 15px;color:#5e4b21;border-radius:4px}.loading{padding:40px;text-align:center;color:var(--muted)}footer{text-align:center;color:var(--muted);padding:24px}
+@media(max-width:700px){.plot{height:500px}.plot.tall{height:700px}.plot.hist{height:1000px}section{padding:16px 10px}}
+</style></head><body>
+<header><h1>Michigan Gasoline Price Expectations</h1><p>Exploratory data analysis · Survey waves 1978–2026 · Based on the supplied Michigan Survey of Consumers microdata</p></header>
+<div class="wrap" id="app"><div class="loading">Loading dashboard data…</div></div><footer>Interactive replication of the supplied EDA notebook. Magnitude variables exclude special missing-value codes.</footer>
+<script>
+const COLORS={'Go up':'#2878b5','Stay the same':'#2ca25f','Go down':'#d95f59',"Don't know":'#8c78b5','Refused':'#9aa3ad'};
+const fmt=n=>Number(n).toLocaleString('en-US');
+function table(headers,rows){return `<div class="table-wrap"><table><thead><tr>${headers.map(h=>`<th>${h}</th>`).join('')}</tr></thead><tbody>${rows.map(r=>`<tr>${r.map(v=>`<td>${v===null||v===undefined?'—':v}</td>`).join('')}</tr>`).join('')}</tbody></table></div>`}
+function section(id,title,desc=''){return `<section><h2>${title}</h2>${desc?`<p class="desc">${desc}</p>`:''}<div id="${id}" class="plot"></div></section>`}
+function lineTraces(records,keys){return keys.map(k=>({type:'scatter',mode:'lines',name:k,x:records.map(r=>r.date),y:records.map(r=>r.values[k]??null),line:{width:2.5,color:COLORS[k]},connectgaps:false,hovertemplate:'%{x|%b %Y}<br>'+k+': %{y:.1f}%<extra></extra>'}))}
+function baseLayout(title,ytitle){return {title:{text:title,font:{size:22}},autosize:true,paper_bgcolor:'#fff',plot_bgcolor:'#fff',font:{size:14},margin:{l:75,r:35,t:75,b:85},hovermode:'x unified',xaxis:{title:'Survey month',rangeslider:{visible:true},rangeselector:{buttons:[{count:1,label:'1Y',step:'year',stepmode:'backward'},{count:5,label:'5Y',step:'year',stepmode:'backward'},{count:10,label:'10Y',step:'year',stepmode:'backward'},{step:'all',label:'All'}]}},yaxis:{title:ytitle,gridcolor:'#e8edf2'},legend:{orientation:'h',y:-.22}}}
+async function main(){
+ const data=await (await fetch('./data.json')).json(); const app=document.getElementById('app');
+ app.innerHTML=`<div class="stats"><div class="stat"><b>${fmt(data.meta.observations)}</b><span>Original observations</span></div><div class="stat"><b>${fmt(data.meta.filtered_observations)}</b><span>Rows with at least one A20/A20b response</span></div><div class="stat"><b>${data.meta.start_year}–${data.meta.end_year}</b><span>Coverage in supplied file</span></div><div class="stat"><b>${data.wave_availability.length}</b><span>Monthly waves in file</span></div></div>
+ <section><h2>1. Michigan gasoline price expectation questions and skip logic</h2>
+ <p class="desc">The four variables form two linked question sequences. The descriptions below summarize the question content; consult the original Michigan questionnaire for exact wording.</p>
+ <div class="stats">
+   <div class="stat"><b>A20</b><span>Direction of expected gasoline price change over the next five years</span></div>
+   <div class="stat"><b>A20a</b><span>Expected magnitude of the five-year price change, in cents per gallon</span></div>
+   <div class="stat"><b>A20b</b><span>Direction of expected gasoline price change over the next 12 months</span></div>
+   <div class="stat"><b>A20c</b><span>Expected magnitude of the 12-month price change, in cents per gallon</span></div>
+ </div>
+ <h3>Question sequence and routing</h3>
+ <div class="note"><b>Step 1 — A20 (five-year direction).</b> Respondents indicate whether they expect gasoline prices to go up, stay the same, go down, or do not know.</div>
+ <p><b>If A20 = Go up or Go down:</b> ask <b>A20a</b>, the expected magnitude of the five-year change. Then continue to A20b.</p>
+ <p><b>If A20 = Stay the same, Don't know, or Refused:</b> skip A20a and continue directly to A20b.</p>
+ <div class="note"><b>Step 2 — A20b (12-month direction).</b> Respondents indicate whether they expect gasoline prices to go up, stay the same, go down, or do not know over the next 12 months.</div>
+ <p><b>If A20b = Go up or Go down:</b> ask <b>A20c</b>, the expected magnitude of the 12-month change.</p>
+ <p><b>If A20b = Stay the same, Don't know, or Refused:</b> skip A20c; the sequence ends.</p>
+ <p class="desc">Important for analysis: A20a and A20c are conditional follow-up questions. Their denominators should not be assumed to equal the full A20/A20b respondent counts.</p>
+ </section>
+ <section><h2>2. Checking the questionnaire skip logic</h2>
+ <p class="desc">This table checks whether magnitude follow-ups are observed among respondents eligible to receive them. Eligibility is defined as answering “Go up” (code 1) or “Go down” (code 5) to the corresponding direction question.</p>
+ <h3>2A. Routing consistency</h3><div id="routing"></div>
+ <p class="note">The check compares eligible and non-eligible respondents with observed magnitude answers. Any non-eligible respondent with a magnitude answer, or eligible respondent without one, may indicate routing, missing-data, or coding issues and should be investigated rather than automatically treated as an error.</p>
+ <h3>2B. Monthly availability and sample sizes</h3>
+ <p class="desc">Monthly counts for total observations (N), A20, A20a, A20b and A20c.</p>
+ <div id="monthly-table"></div>
+ </section>
+ ${section('availability','3. Availability of gasoline expectation questions','Monthly number of non-empty responses for A20 (GASPX1) and A20b (GAS1PX1). Use the range slider to zoom into periods.')}
+ ${section('a20-monthly','4. A20: Five-year gasoline price expectations','Monthly response shares (%), with the notebook’s 1Y/5Y/10Y/all range selector.')}
+ ${section('a20b-monthly','5. A20b: Twelve-month gasoline price expectations','Monthly response shares (%), with the notebook’s 1Y/5Y/10Y/all range selector.')}
+ ${section('a20-annual','6. A20: Annual five-year expectations','Annual stacked response shares; only valid response codes 1, 3, 5, 8 and 9 are included.')}
+ ${section('a20b-annual','7. A20b: Annual twelve-month expectations','Annual stacked response shares; only valid response codes 1, 3, 5, 8 and 9 are included.')}
+ ${section('a20a-trend','8. A20a: Five-year expected price change','Monthly mean and median expected change (cents per gallon).')}
+ ${section('a20c-trend','9. A20c: Twelve-month expected price change','Monthly mean and median expected change (cents per gallon).')}
+ <section><h2>10. Annual distributions — A20a (GASPX2)</h2><p class="desc">Density histograms, 1992–2026; 10-cent bins; values restricted to 0–300 cents, matching the notebook.</p><div id="hist-a20a" class="plot hist"></div></section>
+ <section><h2>11. Annual distributions — A20c (GAS1PX2)</h2><p class="desc">Density histograms, 2005–2026; 10-cent bins; values restricted to 0–200 cents, matching the notebook.</p><div id="hist-a20c" class="plot hist"></div></section>
+ <section><h2>12. Interactive KDE comparison</h2><p class="desc">Select one or more years. The two full-width KDE charts update together, using Gaussian KDE as in the notebook.</p><div class="controls"><label for="years"><b>Select survey years (Ctrl/Cmd-click for multiple):</b></label><select id="years" multiple></select><button class="btn" id="default-years">Select 2019, 2021, 2022, 2023</button><button class="btn" id="all-years">Select all years</button></div><div id="kde-a20a" class="plot"></div><div id="kde-a20c" class="plot"></div></section>
+  <section><h2>13. Monthly response shares by year — A20 and A20b</h2>
+  <p class="desc">Each small panel represents one calendar year. Within each panel, the monthly shares of all five response categories are stacked to 100%. Only years with at least one observed monthly wave are shown. A20 and A20b are displayed separately.</p>
+  <h3>A20: Five-year gasoline price expectations</h3><div id="a20-year-monthly-stacked" class="plot hist"></div>
+<h3>A20b: Twelve-month gasoline price expectations</h3>
+<div id="a20b-year-monthly-stacked" class="plot hist"></div>
+</section>
+
+<section>
+  <h2>14. Pilot Wave Selection</h2>
+
+  <p class="desc">
+    Select the monthly waves to compare. You can select multiple months
+    independently for A20 and A20b.
+  </p>
+
+  <h3>A20: Five-year gasoline price expectations</h3>
+
+  <label for="pilot-a20-select">Select waves:</label>
+  <select id="pilot-a20-select" multiple size="8"
+          style="width:100%; padding:8px; margin:8px 0 15px;">
+  </select>
+
+  <button id="pilot-a20-all">Select all</button>
+  <button id="pilot-a20-clear">Clear selection</button>
+
+  <div id="pilot-a20-table"></div>
+
+  <h3>A20b: Twelve-month gasoline price expectations</h3>
+
+  <label for="pilot-a20b-select">Select waves:</label>
+  <select id="pilot-a20b-select" multiple size="8"
+          style="width:100%; padding:8px; margin:8px 0 15px;">
+  </select>
+
+  <button id="pilot-a20b-all">Select all</button>
+  <button id="pilot-a20b-clear">Clear selection</button>
+
+  <div id="pilot-a20b-table"></div>
+
+  <p class="note">
+    Historical percentiles and standardized distances are calculated
+    relative to all available monthly waves for the respective question.
+    These are descriptive measures, not tests of representativeness.
+  </p>
+</section>`;
+ // availability chart
+ Plotly.newPlot('availability',[{x:data.wave_availability.map(r=>String(r.YYYYMM)),y:data.wave_availability.map(r=>r.GASPX1_nonempty),type:'scatter',mode:'lines+markers',name:'GASPX1',line:{width:2.5},marker:{size:4}},{x:data.wave_availability.map(r=>String(r.YYYYMM)),y:data.wave_availability.map(r=>r.GAS1PX1_nonempty),type:'scatter',mode:'lines+markers',name:'GAS1PX1',line:{width:2.5},marker:{size:4}}],{...baseLayout('Availability of Gasoline Expectation Questions','Number of non-empty responses'),xaxis:{...baseLayout('','').xaxis,type:'category',tickangle:45}}, {responsive:true});
+ // monthly availability transposed: notebook display(monthly_availability.T)
+ const m=data.monthly_availability; document.getElementById('monthly-table').innerHTML=table(['Measure',...m.map(r=>r.YYYYMM)],['N','A20','A20a','A20b','A20c'].map(k=>[k,...m.map(r=>fmt(r[k]))]));
+ for(const [id,key,title] of [['a20-monthly','GASPX1','A20: Five-Year Gasoline Price Expectations'],['a20b-monthly','GAS1PX1','A20b: Twelve-Month Gasoline Price Expectations']]) Plotly.newPlot(id,lineTraces(data.monthly_shares[key],Object.keys(COLORS)),{...baseLayout(title,'Share of respondents (%)'),yaxis:{title:'Share of respondents (%)',range:[0,100],gridcolor:'#e8edf2'}},{responsive:true});
+ function annualPlot(id,key,title){let rows=data.annual_shares[key],yrs=rows.map(r=>r.year),tr=Object.keys(COLORS).map(label=>({type:'bar',name:label,x:yrs,y:rows.map(r=>r.values[label]??0),marker:{color:COLORS[label]},hovertemplate:'Year %{x}<br>'+label+': %{y:.1f}%<extra></extra>'}));Plotly.newPlot(id,tr,{title:{text:title,font:{size:22}},barmode:'stack',autosize:true,margin:{l:75,r:35,t:75,b:75},xaxis:{title:'Year',dtick:1,tickangle:45},yaxis:{title:'Share of respondents (%)',range:[0,100]},legend:{orientation:'h',y:-.25},hovermode:'x unified'},{responsive:true})}
+ annualPlot('a20-annual','GASPX1','A20: Five-Year Gasoline Price Expectations');annualPlot('a20b-annual','GAS1PX1','A20b: Twelve-Month Gasoline Price Expectations');
+ for(const [id,idx] of [['a20a-trend',0],['a20c-trend',1]]){let s=data.magnitude[idx];Plotly.newPlot(id,[{x:s.data.map(r=>r.date),y:s.data.map(r=>r.mean),type:'scatter',mode:'lines',name:'Mean',line:{width:2.5}},{x:s.data.map(r=>r.date),y:s.data.map(r=>r.median),type:'scatter',mode:'lines',name:'Median',line:{width:2.5}}],baseLayout(s.title,'Expected change (cents per gallon)'),{responsive:true})}
+ document.getElementById('routing').innerHTML=table(['Period','Direction question','Magnitude follow-up','Eligible','Eligible with magnitude','Eligible without magnitude','Non-eligible with magnitude'],data.routing.map(r=>[r.period,r.direction_variable,r.magnitude_variable,fmt(r.eligible),fmt(r.eligible_with_magnitude),fmt(r.eligible_without_magnitude),fmt(r.noneligible_with_magnitude)]));
+ function histPlot(id,obj){let years=obj.years;let traces=years.map((r,i)=>({x:r.x,y:r.density,type:'bar',name:String(r.year),xaxis:'x'+(i+1),yaxis:'y'+(i+1),showlegend:false,marker:{color:'#3979b9'},hovertemplate:'Bin: %{x}<br>Density: %{y:.4f}<extra>'+r.year+' · N='+r.n+'</extra>'}));let layout={title:{text:obj.title,font:{size:22}},grid:{rows:Math.ceil(years.length/4),columns:4,pattern:'independent'},height:Math.max(900,Math.ceil(years.length/4)*190),autosize:true,margin:{l:60,r:25,t:75,b:55},font:{size:11},showlegend:false};years.forEach((r,i)=>{layout['xaxis'+(i+1)]={title:{text:'Cents',font:{size:10}},range:[0,obj.xmax],tickfont:{size:9},showgrid:false};layout['yaxis'+(i+1)]={title:{text:'Density',font:{size:9}},tickfont:{size:9},rangemode:'tozero'};});Plotly.newPlot(id,traces,layout,{responsive:true})}
+ histPlot('hist-a20a',data.histograms[0]);histPlot('hist-a20c',data.histograms[1]);
+ const sel=document.getElementById('years');const years=data.kde[0].years.map(r=>r.year);years.forEach(y=>{let o=document.createElement('option');o.value=y;o.textContent=y;sel.appendChild(o)});
+ function updateKDE(){let selected=[...sel.selectedOptions].map(o=>Number(o.value));for(let i=0;i<2;i++){let obj=data.kde[i],tr=obj.years.filter(r=>selected.includes(r.year)).map(r=>({x:obj.x,y:r.density,type:'scatter',mode:'lines',name:`${r.year} (N=${fmt(r.n)})`,line:{width:2.5},hovertemplate:'Expected change: %{x:.1f} cents<br>Density: %{y:.5f}<extra>'+r.year+'</extra>'}));let id=i===0?'kde-a20a':'kde-a20c';Plotly.react(id,tr,{title:{text:obj.title,font:{size:22}},autosize:true,margin:{l:75,r:35,t:75,b:75},xaxis:{title:'Expected price change (cents per gallon)'},yaxis:{title:'Density'},legend:{orientation:'h',y:-.22},hovermode:'x unified'}, {responsive:true})}}
+ function setYears(arr){[...sel.options].forEach(o=>o.selected=arr.includes(Number(o.value)));updateKDE()}
+ document.getElementById('default-years').onclick=()=>setYears([2019,2021,2022,2023]);document.getElementById('all-years').onclick=()=>setYears(years);sel.onchange=updateKDE;setYears([2019,2021,2022,2023]);
+
+  // Section 15: one monthly stacked-response panel for every year with data.
+  // This is appended as a new section; existing charts and calculations are unchanged.
+  function yearlyMonthlyStacked(id, records, title) {
+    const byYear = new Map();
+    records.forEach(r => {
+      const year = Number(r.date.slice(0, 4));
+      const month = Number(r.date.slice(5, 7));
+      if (!byYear.has(year)) byYear.set(year, []);
+      byYear.get(year).push({month, values: r.values});
+    });
+    const years = [...byYear.keys()].sort((a,b) => a-b);
+    const cols = 4;
+    const rows = Math.ceil(years.length / cols);
+    const traces = [];
+    const layout = {
+      title: {text: title, font: {size: 22}},
+      grid: {rows, columns: cols, pattern: 'independent'},
+      height: Math.max(1000, rows * 235 + 120),
+      autosize: true,
+      paper_bgcolor: '#fff',
+      plot_bgcolor: '#fff',
+      margin: {l: 55, r: 25, t: 75, b: 55},
+      font: {size: 11},
+      showlegend: true,
+      barmode: 'stack',
+      legend: {orientation: 'h', y: -0.035, x: 0.5, xanchor: 'center'}
+    };
+    years.forEach((year, i) => {
+      const axisNum = i + 1;
+      const rowsForYear = byYear.get(year).sort((a,b) => a.month-b.month);
+      Object.keys(COLORS).forEach(label => {
+        traces.push({
+          type: 'bar',
+          name: label,
+          legendgroup: label,
+          showlegend: i === 0,
+          x: rowsForYear.map(r => r.month),
+          y: rowsForYear.map(r => r.values[label] ?? 0),
+          xaxis: axisNum === 1 ? 'x' : 'x' + axisNum,
+          yaxis: axisNum === 1 ? 'y' : 'y' + axisNum,
+          marker: {color: COLORS[label]},
+          hovertemplate: 'Month %{x}<br>' + label + ': %{y:.1f}%<extra>' + year + '</extra>'
+        });
+      });
+      layout['xaxis' + (axisNum === 1 ? '' : axisNum)] = {
+        title: {text: 'Month', font: {size: 10}},
+        tickmode: 'array', tickvals: [1,3,5,7,9,11],
+        ticktext: ['Jan','Mar','May','Jul','Sep','Nov'],
+        range: [0.5,12.5], tickfont: {size: 9}, showgrid: false
+      };
+      layout['yaxis' + (axisNum === 1 ? '' : axisNum)] = {
+        title: {text: 'Share (%)', font: {size: 9}},
+        range: [0,100], dtick: 50, tickfont: {size: 9},
+        gridcolor: '#e8edf2'
+      };
+      // Year label inside each individual panel.
+      const xref = axisNum === 1 ? 'x domain' : 'x' + axisNum + ' domain';
+      const yref = axisNum === 1 ? 'y domain' : 'y' + axisNum + ' domain';
+      layout.annotations = layout.annotations || [];
+      layout.annotations.push({
+        text: String(year), x: 0.5, y: 1.08, xref, yref,
+        showarrow: false, font: {size: 13, color: '#172033'}
+      });
+    });
+    Plotly.newPlot(id, traces, layout, {responsive: true});
+  }
+  yearlyMonthlyStacked('a20-year-monthly-stacked', data.monthly_shares.GASPX1,
+    'A20: Monthly stacked response shares by year');
+  yearlyMonthlyStacked('a20b-year-monthly-stacked', data.monthly_shares.GAS1PX1,
+    'A20b: Monthly stacked response shares by year');
+
+// SECTION 16: INTERACTIVE PILOT WAVE SELECTION
+
+const responseLabels = [
+  'Go up',
+  'Stay the same',
+  'Go down',
+  "Don't know",
+  'Refused'
+];
+
+const candidateStart = '2021-09';
+const candidateEnd = '2022-03';
+
+// Calculate empirical historical percentile
+function historicalPercentile(value, historicalValues) {
+  const valid = historicalValues.filter(Number.isFinite);
+  if (!valid.length) return null;
+
+  return 100 * valid.filter(v => v <= value).length / valid.length;
+}
+
+// Calculate standardized distance from historical average
+function historicalDistance(values, historicalRows) {
+  const zScores = [];
+
+  responseLabels.forEach(label => {
+    const series = historicalRows
+      .map(r => r.values[label])
+      .filter(Number.isFinite);
+
+    const mean = series.reduce((a, b) => a + b, 0) / series.length;
+
+    const variance = series.reduce(
+      (sum, v) => sum + Math.pow(v - mean, 2), 0
+    ) / series.length;
+
+    const sd = Math.sqrt(variance);
+
+    if (sd > 0) {
+      zScores.push(Math.pow((values[label] - mean) / sd, 2));
+    }
+  });
+
+  return zScores.length
+    ? Math.sqrt(zScores.reduce((a, b) => a + b, 0) / zScores.length)
+    : null;
+}
+
+// Build one interactive comparison table
+function setupPilotTable(questionKey, magnitudeKey, selectId,
+                         tableId, allId, clearId) {
+
+  const historicalRows = data.monthly_shares[questionKey];
+
+  const availability = new Map(
+    data.monthly_availability.map(r => [
+      String(r.YYYYMM), r
+    ])
+  );
+
+  const select = document.getElementById(selectId);
+
+  // Available months for this question
+  const availableMonths = historicalRows
+    .map(r => r.date.slice(0, 7));
+
+  // Populate selectable list
+  select.innerHTML = availableMonths.map(month =>
+    `<option value="${month}" selected>${month}</option>`
+  ).join('');
+
+  function renderTable() {
+    const selectedMonths = new Set(
+      [...select.selectedOptions].map(o => o.value)
+    );
+
+    const selectedRows = historicalRows.filter(r =>
+      selectedMonths.has(r.date.slice(0, 7))
+    );
+
+    const historicalDecrease = historicalRows.map(
+      r => r.values['Go down']
+    );
+
+    const historicalDK = historicalRows.map(
+      r => r.values["Don't know"]
+    );
+
+    const headers = [
+      'Month',
+      'Respondents',
+      'Magnitude N',
+      'Go up (%)',
+      'Same (%)',
+      'Go down (%)',
+      "Don't know (%)",
+      'Decrease percentile',
+      'DK percentile',
+      'Historical distance'
+    ];
+
+    const rows = selectedRows.map(r => {
+      const month = r.date.slice(0, 7);
+      const yyyymm = month.replace('-', '');
+      const availabilityRow = availability.get(yyyymm) || {};
+
+      const values = r.values;
+
+      const n = availabilityRow[
+        questionKey === 'GASPX1' ? 'A20' : 'A20b'
+      ] ?? 0;
+
+      const magnitudeN = availabilityRow[
+        magnitudeKey === 'GASPX2' ? 'A20a' : 'A20c'
+      ] ?? 0;
+
+      const decreaseP = historicalPercentile(
+        values['Go down'], historicalDecrease
+      );
+
+      const dkP = historicalPercentile(
+        values["Don't know"], historicalDK
+      );
+
+      const distance = historicalDistance(values, historicalRows);
+
+      return [
+        month,
+        fmt(n),
+        fmt(magnitudeN),
+        values['Go up'].toFixed(2),
+        values['Stay the same'].toFixed(2),
+        values['Go down'].toFixed(2),
+        values["Don't know"].toFixed(2),
+        decreaseP.toFixed(1),
+        dkP.toFixed(1),
+        distance === null ? '—' : distance.toFixed(2)
+      ];
+    });
+
+    document.getElementById(tableId).innerHTML =
+      rows.length
+        ? table(headers, rows)
+        : '<p>No waves selected.</p>';
+  }
+
+  // Select all available waves
+  document.getElementById(allId).addEventListener('click', () => {
+    [...select.options].forEach(o => o.selected = true);
+    renderTable();
+  });
+
+  // Clear selection
+  document.getElementById(clearId).addEventListener('click', () => {
+    [...select.options].forEach(o => o.selected = false);
+    renderTable();
+  });
+
+  // Update table whenever selection changes
+  select.addEventListener('change', renderTable);
+
+  renderTable();
+}
+
+// Initialize the two independent tables
+setupPilotTable(
+  'GASPX1', 'GASPX2',
+  'pilot-a20-select', 'pilot-a20-table',
+  'pilot-a20-all', 'pilot-a20-clear'
+);
+
+setupPilotTable(
+  'GAS1PX1', 'GAS1PX2',
+  'pilot-a20b-select', 'pilot-a20b-table',
+  'pilot-a20b-all', 'pilot-a20b-clear'
+);
+
+
+
+ // resize plotly charts after responsive layout settles
+ window.addEventListener('resize',()=>document.querySelectorAll('.js-plotly-plot').forEach(p=>Plotly.Plots.resize(p)));
+}
+main().catch(e=>{document.getElementById('app').innerHTML='<section><h2>Dashboard data could not be loaded</h2><p>'+e.message+'</p><p>Check that data.json is in the same repository root as index.html.</p></section>';console.error(e)});
+</script></body></html>
