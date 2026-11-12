@@ -52,9 +52,8 @@ llm-synthetic-survey-research/
 │   └── knowledge_restriction.py
 │
 ├── 04_survey_pilot/
-│   └── pilot_experiment.py
-│
-└── requirements.txt
+   └── pilot_experiment.py
+
 ```
 
 *The structure will evolve as the research progresses.*
@@ -75,7 +74,7 @@ Python code for extracting and constructing synthetic respondent personas using 
 
 An approach to restricting the information available to LLM-generated respondents, with the aim of reducing reliance on knowledge beyond the information intended to be available to them.
 
-**4. Pilot Survey Implementation**
+**4. Pilot Survey Implementation (in progress)**
 
 Initial experiments testing the implementation of the gasoline price expectation questions with LLM-generated respondents.
 
@@ -86,30 +85,6 @@ These components represent ongoing research and preliminary implementation rathe
 The project follows the LLM survey framework proposed by Wu, Xi and Xie (2025), with an initial focus on adapting its methodology to an established consumer expectations survey.
 
 The validation strategy aims to compare synthetic responses with real human survey evidence, examining response distributions, aggregate patterns and differences across survey questions and periods.
-
-## Future Development: Agentic Research Workflow
-
-An important direction for future development is introducing an agentic layer to support and automate different stages of the research pipeline.
-
-Potential applications include:
-
-- Automated literature extraction and evidence verification.
-- Survey data auditing and quality assurance.
-- Automated execution and validation of analytical workflows.
-- Monitoring response patterns and inconsistencies across survey waves.
-- Reproducible documentation of experiments, model configurations and results.
-
-The longer-term ambition is to develop a framework capable of running synthetic surveys periodically and systematically evaluating their outputs against real-world survey benchmarks.
-
-This agentic extension is an ongoing development direction and is not yet implemented.
-
-## Technologies
-
-- Python
-- Pandas and NumPy
-- Statistical and exploratory data analysis
-- Large Language Models and API-based inference
-- Jupyter Notebooks
 
 ## Research Status
 
@@ -127,7 +102,7 @@ Rather than treating LLM-generated responses as substitutes for human participan
 
 **Niloofar Adel**
 
-Junior Researcher & Data Scientist  
+Junior Data Scientist & Researcher
 Fondazione Eni Enrico Mattei (FEEM)
 
 [GitHub](https://github.com/neiladel)
