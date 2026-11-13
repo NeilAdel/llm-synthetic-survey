@@ -269,6 +269,10 @@ function setupPilotTable(questionKey, magnitudeKey, selectId,
       selectedMonths.has(r.date.slice(0, 7))
     );
 
+    const historicalIncrease = historicalRows.map(
+      r => r.values['Go up']
+    );
+
     const historicalDecrease = historicalRows.map(
       r => r.values['Go down']
     );
@@ -285,6 +289,7 @@ function setupPilotTable(questionKey, magnitudeKey, selectId,
       'Same (%)',
       'Go down (%)',
       "Don't know (%)",
+      'Increase percentile',
       'Decrease percentile',
       'DK percentile',
       'Historical distance'
@@ -305,6 +310,10 @@ function setupPilotTable(questionKey, magnitudeKey, selectId,
         magnitudeKey === 'GASPX2' ? 'A20a' : 'A20c'
       ] ?? 0;
 
+      const increaseP = historicalPercentile(
+        values['Go up'], historicalIncrease
+      );
+
       const decreaseP = historicalPercentile(
         values['Go down'], historicalDecrease
       );
@@ -323,6 +332,7 @@ function setupPilotTable(questionKey, magnitudeKey, selectId,
         values['Stay the same'].toFixed(2),
         values['Go down'].toFixed(2),
         values["Don't know"].toFixed(2),
+        increaseP.toFixed(1),
         decreaseP.toFixed(1),
         dkP.toFixed(1),
         distance === null ? '—' : distance.toFixed(2)
