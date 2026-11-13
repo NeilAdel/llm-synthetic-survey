@@ -31,7 +31,7 @@ The initial empirical application uses four gasoline price expectation questions
 
 The historical survey data cover multiple decades, although the availability of these questions varies across survey periods. Identifying comparable waves and understanding the structure of the original questionnaire are therefore important parts of the research.
 
-**Exploratory Data Analysis:** [Michigan Survey EDA Dashboard](https://neiladel.github.io/EDA-UMICH/)
+**Exploratory Data Analysis:** [Michigan Survey EDA Dashboard]([https://neiladel.github.io/EDA-UMICH/](https://neiladel.github.io/llm-synthetic-survey/01_michigan_survey_eda/))
 
 ## Repository Structure
 
