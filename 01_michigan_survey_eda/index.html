@@ -68,32 +68,25 @@ async function main(){
   <h2>14. Pilot Wave Selection</h2>
 
   <p class="desc">
-    Select the monthly waves to compare. You can select multiple months
-    independently for A20 and A20b.
+    Select monthly waves once to update both tables. The default selection is
+    January–December 2021. Use Ctrl/Cmd-click to select multiple individual months.
   </p>
 
-  <h3>A20: Five-year gasoline price expectations</h3>
-
-  <label for="pilot-a20-select">Select waves:</label>
-  <select id="pilot-a20-select" multiple size="8"
-          style="width:100%; padding:8px; margin:8px 0 15px;">
+  <label for="pilot-wave-select"><b>Select survey months:</b></label>
+  <select id="pilot-wave-select" multiple size="8"
+          style="width:100%; padding:8px; margin:8px 0 12px;">
   </select>
 
-  <button id="pilot-a20-all">Select all</button>
-  <button id="pilot-a20-clear">Clear selection</button>
+  <div style="display:flex; gap:8px; flex-wrap:wrap; margin-bottom:18px;">
+    <button id="pilot-select-2021">Select all of 2021</button>
+    <button id="pilot-select-all">Select all available months</button>
+    <button id="pilot-clear">Clear selection</button>
+  </div>
 
+  <h3>A20: Five-year gasoline price expectations</h3>
   <div id="pilot-a20-table"></div>
 
   <h3>A20b: Twelve-month gasoline price expectations</h3>
-
-  <label for="pilot-a20b-select">Select waves:</label>
-  <select id="pilot-a20b-select" multiple size="8"
-          style="width:100%; padding:8px; margin:8px 0 15px;">
-  </select>
-
-  <button id="pilot-a20b-all">Select all</button>
-  <button id="pilot-a20b-clear">Clear selection</button>
-
   <div id="pilot-a20b-table"></div>
 
   <p class="note">
@@ -238,8 +231,7 @@ function historicalDistance(values, historicalRows) {
 }
 
 // Build one interactive comparison table
-function setupPilotTable(questionKey, magnitudeKey, selectId,
-                         tableId, allId, clearId) {
+function setupPilotTable(questionKey, magnitudeKey, select, tableId) {
 
   const historicalRows = data.monthly_shares[questionKey];
 
@@ -248,17 +240,6 @@ function setupPilotTable(questionKey, magnitudeKey, selectId,
       String(r.YYYYMM), r
     ])
   );
-
-  const select = document.getElementById(selectId);
-
-  // Available months for this question
-  const availableMonths = historicalRows
-    .map(r => r.date.slice(0, 7));
-
-  // Populate selectable list
-  select.innerHTML = availableMonths.map(month =>
-    `<option value="${month}" selected>${month}</option>`
-  ).join('');
 
   function renderTable() {
     const selectedMonths = new Set(
@@ -299,7 +280,6 @@ function setupPilotTable(questionKey, magnitudeKey, selectId,
       const month = r.date.slice(0, 7);
       const yyyymm = month.replace('-', '');
       const availabilityRow = availability.get(yyyymm) || {};
-
       const values = r.values;
 
       const n = availabilityRow[
@@ -342,43 +322,65 @@ function setupPilotTable(questionKey, magnitudeKey, selectId,
     document.getElementById(tableId).innerHTML =
       rows.length
         ? table(headers, rows)
-        : '<p>No waves selected.</p>';
+        : '<p>No waves selected or no data available for the selected months.</p>';
   }
 
-  // Select all available waves
-  document.getElementById(allId).addEventListener('click', () => {
-    [...select.options].forEach(o => o.selected = true);
-    renderTable();
-  });
-
-  // Clear selection
-  document.getElementById(clearId).addEventListener('click', () => {
-    [...select.options].forEach(o => o.selected = false);
-    renderTable();
-  });
-
-  // Update table whenever selection changes
-  select.addEventListener('change', renderTable);
-
-  renderTable();
+  return renderTable;
 }
 
-// Initialize the two independent tables
-setupPilotTable(
-  'GASPX1', 'GASPX2',
-  'pilot-a20-select', 'pilot-a20-table',
-  'pilot-a20-all', 'pilot-a20-clear'
+// Create one shared month selector from the union of months available
+// for either A20 or A20b.
+const pilotSelect = document.getElementById('pilot-wave-select');
+const pilotMonths = [...new Set([
+  ...data.monthly_shares.GASPX1.map(r => r.date.slice(0, 7)),
+  ...data.monthly_shares.GAS1PX1.map(r => r.date.slice(0, 7))
+])].sort();
+
+pilotSelect.innerHTML = pilotMonths.map(month =>
+  `<option value="${month}">${month}</option>`
+).join('');
+
+const renderA20 = setupPilotTable(
+  'GASPX1', 'GASPX2', pilotSelect, 'pilot-a20-table'
 );
 
-setupPilotTable(
-  'GAS1PX1', 'GAS1PX2',
-  'pilot-a20b-select', 'pilot-a20b-table',
-  'pilot-a20b-all', 'pilot-a20b-clear'
+const renderA20b = setupPilotTable(
+  'GAS1PX1', 'GAS1PX2', pilotSelect, 'pilot-a20b-table'
 );
 
+function updatePilotTables() {
+  renderA20();
+  renderA20b();
+}
+
+function selectPilotMonths(months) {
+  [...pilotSelect.options].forEach(option => {
+    option.selected = months.includes(option.value);
+  });
+  updatePilotTables();
+}
+
+// Default: all available months in 2021.
+const months2021 = pilotMonths.filter(month => month.startsWith('2021-'));
+selectPilotMonths(months2021);
+
+document.getElementById('pilot-select-2021').addEventListener('click', () => {
+  selectPilotMonths(months2021);
+});
+
+document.getElementById('pilot-select-all').addEventListener('click', () => {
+  selectPilotMonths(pilotMonths);
+});
+
+document.getElementById('pilot-clear').addEventListener('click', () => {
+  selectPilotMonths([]);
+});
+
+pilotSelect.addEventListener('change', updatePilotTables);
 
 
- // resize plotly charts after responsive layout settles
+
+// resize plotly charts after responsive layout settles
  window.addEventListener('resize',()=>document.querySelectorAll('.js-plotly-plot').forEach(p=>Plotly.Plots.resize(p)));
 }
 main().catch(e=>{document.getElementById('app').innerHTML='<section><h2>Dashboard data could not be loaded</h2><p>'+e.message+'</p><p>Check that data.json is in the same repository root as index.html.</p></section>';console.error(e)});
