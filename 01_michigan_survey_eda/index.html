@@ -73,9 +73,10 @@ async function main(){
   <h2>14. Pilot Wave Selection</h2>
 
   <p class="desc">
-    Select monthly waves once to update both tables. The default selection is
-    January–December 2021. The tables compare each selected wave with the full
-    historical distribution for that question. Use Ctrl/Cmd-click to select months.
+    Select monthly waves once to update both tables. The default selection
+    uses the seven recommended pre-/post-COVID comparison waves listed below.
+    The tables compare each selected wave with the full historical distribution
+    for that question. Use Ctrl/Cmd-click to select or deselect individual months.
   </p>
 
   <label for="pilot-wave-select"><b>Select survey months:</b></label>
@@ -84,7 +85,7 @@ async function main(){
   </select>
 
   <div style="display:flex; gap:8px; flex-wrap:wrap; margin-bottom:18px;">
-    //  <button id="pilot-select-2021">Select all of 2021</button>
+    <button id="pilot-select-recommended">Select recommended waves</button>
     <button id="pilot-select-all">Select all available months</button>
     <button id="pilot-clear">Clear selection</button>
   </div>
@@ -333,13 +334,26 @@ function selectPilotMonths(months) {
   updatePilotTables();
 }
 
-// Default: all available months in 2021.
-// const months2021 = pilotMonths.filter(month => month.startsWith('2021-'));
-// selectPilotMonths(months2021);
+// Recommended comparison waves: selected to include pre-COVID observations
+// and one later post-COVID observation, while excluding 2020.
+const recommendedMonths = [
+  '2017-01', '2017-04', '2017-06',
+  '2018-05', '2018-06',
+  '2019-05',
+  '2023-11'
+];
 
-// document.getElementById('pilot-select-2021').addEventListener('click', () => {
-//  selectPilotMonths(months2021);
-// });
+// Keep only months that are actually present in the supplied dataset.
+const availableRecommendedMonths = recommendedMonths.filter(month =>
+  pilotMonths.includes(month)
+);
+
+// Default selection shown when the dashboard first loads.
+selectPilotMonths(availableRecommendedMonths);
+
+document.getElementById('pilot-select-recommended').addEventListener('click', () => {
+  selectPilotMonths(availableRecommendedMonths);
+});
 
 document.getElementById('pilot-select-all').addEventListener('click', () => {
   selectPilotMonths(pilotMonths);
