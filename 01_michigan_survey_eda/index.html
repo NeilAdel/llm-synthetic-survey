@@ -84,7 +84,7 @@ async function main(){
   </select>
 
   <div style="display:flex; gap:8px; flex-wrap:wrap; margin-bottom:18px;">
-    <button id="pilot-select-2021">Select all of 2021</button>
+    //  <button id="pilot-select-2021">Select all of 2021</button>
     <button id="pilot-select-all">Select all available months</button>
     <button id="pilot-clear">Clear selection</button>
   </div>
@@ -334,12 +334,12 @@ function selectPilotMonths(months) {
 }
 
 // Default: all available months in 2021.
-const months2021 = pilotMonths.filter(month => month.startsWith('2021-'));
-selectPilotMonths(months2021);
+// const months2021 = pilotMonths.filter(month => month.startsWith('2021-'));
+// selectPilotMonths(months2021);
 
-document.getElementById('pilot-select-2021').addEventListener('click', () => {
-  selectPilotMonths(months2021);
-});
+// document.getElementById('pilot-select-2021').addEventListener('click', () => {
+//  selectPilotMonths(months2021);
+// });
 
 document.getElementById('pilot-select-all').addEventListener('click', () => {
   selectPilotMonths(pilotMonths);
