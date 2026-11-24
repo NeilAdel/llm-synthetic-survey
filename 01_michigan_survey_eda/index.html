@@ -21,6 +21,11 @@ function lineTraces(records,keys){return keys.map(k=>({type:'scatter',mode:'line
 function baseLayout(title,ytitle){return {title:{text:title,font:{size:22}},autosize:true,paper_bgcolor:'#fff',plot_bgcolor:'#fff',font:{size:14},margin:{l:75,r:35,t:75,b:85},hovermode:'x unified',xaxis:{title:'Survey month',rangeslider:{visible:true},rangeselector:{buttons:[{count:1,label:'1Y',step:'year',stepmode:'backward'},{count:5,label:'5Y',step:'year',stepmode:'backward'},{count:10,label:'10Y',step:'year',stepmode:'backward'},{step:'all',label:'All'}]}},yaxis:{title:ytitle,gridcolor:'#e8edf2'},legend:{orientation:'h',y:-.22}}}
 async function main(){
  const data=await (await fetch('./data.json')).json(); const app=document.getElementById('app');
+ // Lookup monthly respondent counts by YYYYMM for the Pilot Wave Selection tables.
+ // This Map is required because the tables retrieve each wave with availability.get(yyyymm).
+ const availability = new Map(
+   (data.monthly_availability || []).map(r => [String(r.YYYYMM), r])
+ );
  app.innerHTML=`<div class="stats"><div class="stat"><b>${fmt(data.meta.observations)}</b><span>Original observations</span></div><div class="stat"><b>${fmt(data.meta.filtered_observations)}</b><span>Rows with at least one A20/A20b response</span></div><div class="stat"><b>${data.meta.start_year}–${data.meta.end_year}</b><span>Coverage in supplied file</span></div><div class="stat"><b>${data.wave_availability.length}</b><span>Monthly waves in file</span></div></div>
  <section><h2>1. Michigan gasoline price expectation questions and skip logic</h2>
  <p class="desc">The four variables form two linked question sequences. The descriptions below summarize the question content; consult the original Michigan questionnaire for exact wording.</p>
@@ -69,7 +74,8 @@ async function main(){
 
   <p class="desc">
     Select monthly waves once to update both tables. The default selection is
-    January–December 2021. Use Ctrl/Cmd-click to select multiple individual months.
+    January–December 2021. The tables compare each selected wave with the full
+    historical distribution for that question. Use Ctrl/Cmd-click to select months.
   </p>
 
   <label for="pilot-wave-select"><b>Select survey months:</b></label>
@@ -90,9 +96,14 @@ async function main(){
   <div id="pilot-a20b-table"></div>
 
   <p class="note">
-    Historical percentiles and standardized distances are calculated
-    relative to all available monthly waves for the respective question.
-    These are descriptive measures, not tests of representativeness.
+    Distances are absolute standardized differences from the historical
+    monthly mean, expressed in standard-deviation (SD) units. The overall
+    distribution distance is the root-mean-square of the distances across
+    all five response categories (including Refused); category columns show
+    Go up, Go down, Stay the same and Don't know separately. A value near 0
+    means the selected wave is close to its historical average; larger values
+    indicate a less typical response share. These are descriptive measures,
+    not tests of representativeness.
   </p>
 </section>`;
  // availability chart
@@ -192,54 +203,50 @@ const responseLabels = [
   'Refused'
 ];
 
-const candidateStart = '2021-09';
-const candidateEnd = '2022-03';
-
-// Calculate empirical historical percentile
-function historicalPercentile(value, historicalValues) {
-  const valid = historicalValues.filter(Number.isFinite);
-  if (!valid.length) return null;
-
-  return 100 * valid.filter(v => v <= value).length / valid.length;
-}
-
-// Calculate standardized distance from historical average
-function historicalDistance(values, historicalRows) {
-  const zScores = [];
+// For each response category, calculate the absolute standardized
+// distance from its historical monthly mean, measured in SD units.
+// The overall distribution distance is the RMS of these category distances.
+function historicalDistances(values, historicalRows) {
+  const categoryDistances = {};
+  const squaredDistances = [];
 
   responseLabels.forEach(label => {
     const series = historicalRows
-      .map(r => r.values[label])
+      .map(r => Number(r.values[label]))
       .filter(Number.isFinite);
 
-    const mean = series.reduce((a, b) => a + b, 0) / series.length;
+    if (!series.length) {
+      categoryDistances[label] = null;
+      return;
+    }
 
+    const mean = series.reduce((a, b) => a + b, 0) / series.length;
     const variance = series.reduce(
       (sum, v) => sum + Math.pow(v - mean, 2), 0
     ) / series.length;
-
     const sd = Math.sqrt(variance);
 
-    if (sd > 0) {
-      zScores.push(Math.pow((values[label] - mean) / sd, 2));
+    const distance = sd > 0
+      ? Math.abs((Number(values[label]) - mean) / sd)
+      : (Number(values[label]) === mean ? 0 : null);
+
+    categoryDistances[label] = distance;
+    if (distance !== null && Number.isFinite(distance)) {
+      squaredDistances.push(distance * distance);
     }
   });
 
-  return zScores.length
-    ? Math.sqrt(zScores.reduce((a, b) => a + b, 0) / zScores.length)
+  categoryDistances.overall = squaredDistances.length
+    ? Math.sqrt(squaredDistances.reduce((a, b) => a + b, 0) / squaredDistances.length)
     : null;
+
+  return categoryDistances;
 }
 
 // Build one interactive comparison table
 function setupPilotTable(questionKey, magnitudeKey, select, tableId) {
 
   const historicalRows = data.monthly_shares[questionKey];
-
-  const availability = new Map(
-    data.monthly_availability.map(r => [
-      String(r.YYYYMM), r
-    ])
-  );
 
   function renderTable() {
     const selectedMonths = new Set(
@@ -250,30 +257,14 @@ function setupPilotTable(questionKey, magnitudeKey, select, tableId) {
       selectedMonths.has(r.date.slice(0, 7))
     );
 
-    const historicalIncrease = historicalRows.map(
-      r => r.values['Go up']
-    );
-
-    const historicalDecrease = historicalRows.map(
-      r => r.values['Go down']
-    );
-
-    const historicalDK = historicalRows.map(
-      r => r.values["Don't know"]
-    );
-
     const headers = [
       'Month',
       'Respondents',
-      'Magnitude N',
-      'Go up (%)',
-      'Same (%)',
-      'Go down (%)',
-      "Don't know (%)",
-      'Increase percentile',
-      'Decrease percentile',
-      'DK percentile',
-      'Historical distance'
+      'Overall distribution distance (SD)',
+      'Go up distance (SD)',
+      'Go down distance (SD)',
+      'Stay the same distance (SD)',
+      "Don't know distance (SD)"
     ];
 
     const rows = selectedRows.map(r => {
@@ -286,36 +277,18 @@ function setupPilotTable(questionKey, magnitudeKey, select, tableId) {
         questionKey === 'GASPX1' ? 'A20' : 'A20b'
       ] ?? 0;
 
-      const magnitudeN = availabilityRow[
-        magnitudeKey === 'GASPX2' ? 'A20a' : 'A20c'
-      ] ?? 0;
-
-      const increaseP = historicalPercentile(
-        values['Go up'], historicalIncrease
-      );
-
-      const decreaseP = historicalPercentile(
-        values['Go down'], historicalDecrease
-      );
-
-      const dkP = historicalPercentile(
-        values["Don't know"], historicalDK
-      );
-
-      const distance = historicalDistance(values, historicalRows);
+      const distances = historicalDistances(values, historicalRows);
+      const showDistance = value =>
+        value === null || !Number.isFinite(value) ? '—' : value.toFixed(2);
 
       return [
         month,
         fmt(n),
-        fmt(magnitudeN),
-        values['Go up'].toFixed(2),
-        values['Stay the same'].toFixed(2),
-        values['Go down'].toFixed(2),
-        values["Don't know"].toFixed(2),
-        increaseP.toFixed(1),
-        decreaseP.toFixed(1),
-        dkP.toFixed(1),
-        distance === null ? '—' : distance.toFixed(2)
+        showDistance(distances.overall),
+        showDistance(distances['Go up']),
+        showDistance(distances['Go down']),
+        showDistance(distances['Stay the same']),
+        showDistance(distances["Don't know"])
       ];
     });
 
